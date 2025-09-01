@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Live Transcription</title>
+<style>
+body { 
+    font-family: Arial, Helvetica, sans-serif; 
+    max-width: 900px; 
+    margin: 40px auto; 
+    background: #f5f5f5; 
+}
+.card { 
+    background: #fff; 
+    padding: 30px 40px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 8px rgba(0,0,0,.1); 
+}
+h1 { text-align: center; }
+#output { 
+    white-space: pre-wrap; 
+    font-family: monospace; 
+    background: #000; 
+    color: #0f0; 
+    padding: 10px; 
+    border-radius: 6px; 
+    height: 350px; 
+    overflow-y: auto; 
+    margin-top: 20px; 
+    display: none; 
+}
+button { 
+    background: #0069d9; 
+    color: #fff; 
+    border: none; 
+    padding: 12px 25px; 
+    border-radius: 4px; 
+    font-size: 16px; 
+    width: 100%; 
+}
+button:disabled { background: #6c757d; }
+
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal {
+    background: #fff;
+    padding: 20px 30px;
+    border-radius: 8px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.modal h2 {
+    margin-bottom: 15px;
+}
+
+.modal p {
+    margin-bottom: 20px;
+}
+
+.modal input[type="text"] {
+    width: 90%;
+    padding: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.modal button {
+    background: #007BFF;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 5px;
+}
+
+.modal button:hover {
+    background: #0056b3;
+}
+
+.modal .cancel-btn {
+    background: #6c757d;
+}
+
+.modal .cancel-btn:hover {
+    background: #545b62;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+</style>
+</head>
+<body>
+
+<div class="card">
+    <h1>Upload Data</h1>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file-input" name="file" accept=".csv" required> 
+        <br><br>
+        <button id="btn">Start</button>
+    </form>
+    <div id="output"></div>
+</div>
+
+<!-- Upload Confirmation Modal -->
+<div class="modal-overlay" id="uploadModal">
+    <div class="modal">
+        <h2>Upload Confirmation</h2>
+        <p id="uploadMessage"></p>
+        <button onclick="closeUploadConfirmation()">OK</button>
+    </div>
+</div>
+
+<!-- Table Name Input Modal -->
+<div class="modal-overlay" id="tableNameModal">
+    <div class="modal">
+        <h2>Enter Table Name</h2>
+        <input type="text" id="tableNameInput" placeholder="e.g. customer_data" />
+        <div>
+            <button id="okBtn">OK</button>
+            <button class="cancel-btn" id="cancelBtn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script>
+let tableName_ = "";
+
+// Simple hash function using CryptoJS (works without HTTPS)
+function generateHash(text) {
+    return CryptoJS.SHA256(text).toString(CryptoJS.enc.Hex);
+}
+
+function askForTableName(hash, firstLine) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('tableNameModal');
+        const input = document.getElementById('tableNameInput');
+        const okBtn = document.getElementById('okBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        
+        overlay.style.display = 'flex';
+        input.value = '';
+        input.focus();
+        
+        function close(value) {
+            overlay.style.display = 'none';
+            okBtn.removeEventListener('click', okHandler);
+            cancelBtn.removeEventListener('click', cancelHandler);
+            resolve(value);
+        }
+        
+        function okHandler() {
+            const tableName = input.value.trim();
+            if (tableName) {
+                makeTable(tableName, hash, firstLine);
+                console.log(tableName + " " + firstLine + " " + hash);
+                close(tableName);
+            } else {
+                alert('Please enter a table name');
+            }
+        }
+        
+        function cancelHandler() {
+            close(null);
+        }
+        
+        okBtn.addEventListener('click', okHandler);
+        cancelBtn.addEventListener('click', cancelHandler);
+        
+        // Allow Enter/Escape keyboard shortcuts
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') okHandler();
+            if (e.key === 'Escape') cancelHandler();
+        };
+    });
+}
+
+async function makeTable(tableName, hash, topline) {
+    const url = '/make_table';
+    const bodyData = {
+        Table_Name: tableName,
+        hash: hash,
+        topline: topline
+    };
+    
+    console.log("Creating table...");
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(bodyData)
+        });
+        
+        console.log(response);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Server response:', result);
+        alert(JSON.stringify(result));
+    } catch (error) {
+        console.error('Error creating table:', error);
+        alert('Error creating table: ' + error.message);
+    }
+}
+
+function showUploadConfirmation(tableName) {
+    document.getElementById('uploadMessage').textContent = 
+        `This file will be uploaded to "${tableName}"`;
+    tableName_ = tableName;
+    document.getElementById('uploadModal').style.display = 'flex';
+}
+
+function closeUploadConfirmation() {
+    document.getElementById('uploadModal').style.display = 'none';
+}
+
+async function checkTest(testValue, table_info) {
+    try {
+        const response = await fetch('/check_test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                test: testValue,
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Alert based on the exists property
+        if (result.exists === true) {
+            showUploadConfirmation(result.table_name);
+        } else if (result.exists === false) {
+            await askForTableName(testValue, table_info);
+        } else {
+            alert('Unexpected response format');
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error occurred: ' + error.message);
+    }
+}
+
+document.getElementById('file-input').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        // Get only the first line from the file
+        const firstLine = e.target.result.split(/\r?\n/)[0];
+        
+        // Generate hash using CryptoJS instead of crypto.subtle
+        const hashHex = generateHash(firstLine);
+        
+        checkTest(hashHex, firstLine);
+    };
+    reader.readAsText(file);
+});
+
+const form = document.getElementById('upload-form');
+const output = document.getElementById('output');
+const btn = document.getElementById('btn');
+
+form.addEventListener('submit', e => {
+    e.preventDefault();
+    
+    const data = new FormData(form);
+    data.append('tableName', tableName_);
+    
+    btn.disabled = true; 
+    btn.textContent = 'Running…';
+    output.style.display = 'block'; 
+    output.textContent = '';
+    
+    if (tableName_ === "") {
+        alert("Database is not loaded");
+        btn.disabled = false; 
+        btn.textContent = 'Start';
+        return;
+    }
+    
+    fetch('/upload', {
+        method: 'POST', 
+        body: data
+    }).then(resp => {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        
+        function read() {
+            reader.read().then(({done, value}) => {
+                if (done) { 
+                    btn.disabled = false; 
+                    btn.textContent = 'Start'; 
+                    return; 
+                }
+                output.textContent += decoder.decode(value);
+                output.scrollTop = output.scrollHeight;
+                read();
+            });
+        }
+        read();
+    }).catch(error => {
+        console.error('Upload error:', error);
+        alert('Upload error: ' + error.message);
+        btn.disabled = false; 
+        btn.textContent = 'Start';
+    });
+});
+</script>
+
+</body>
+</html>
