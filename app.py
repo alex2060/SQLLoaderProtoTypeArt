@@ -47,7 +47,7 @@ from typing import Dict, List, Any, Union
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_FOLDER = "."
 app = Flask(__name__)
-MYSQL_URI = "mysql+pymysql://admin:RQApoaNQ@mysql-199933-0.cloudclusters.net:10033/testing"
+MYSQL_URI = "mysql+pymysql://admin:PaZxEQB2@mysql-197364-0.cloudclusters.net:19852/arttest"
 engine = create_engine(MYSQL_URI)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -94,11 +94,11 @@ def execute_create_table(create_table_sql):
         raise ValueError("create_table_sql must be a string containing a single SQL statement.")
 
     conn = pymysql.connect(
-        host="mysql-199933-0.cloudclusters.net",
-        port=10033,
+        host="mysql-197364-0.cloudclusters.net",
+        port=19852,
         user="admin",
-        password="RQApoaNQ",
-        database="testing"
+        password="PaZxEQB2",
+        database="arttest"
     )
 
     try:
@@ -480,11 +480,11 @@ def execute_insert(insert_table_sql):
     """
 
     conn = pymysql.connect(
-        host="mysql-199933-0.cloudclusters.net",
-        port=10033,
+        host="mysql-197364-0.cloudclusters.net",
+        port=19852,
         user="admin",
-        password="RQApoaNQ",
-        database="testing"
+        password="PaZxEQB2",
+        database="arttest"
     )
 
     try:
